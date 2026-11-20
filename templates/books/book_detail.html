@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ book.title }}{% endblock %}
+{% block main_class %}{% endblock %}
+{% block content %}
+  <a href="{% url 'books:list' %}" class="btn btn-sm btn-link mb-3">&larr; All books</a>
+  <div class="row g-4">
+    {% if book.cover %}
+      <div class="col-md-4">
+        <img src="{{ book.cover.url }}" class="img-fluid rounded" alt="Cover of {{ book.title }}">
+      </div>
+    {% endif %}
+    <div class="col">
+      <h1>{{ book.title }}</h1>
+      <p class="text-muted">
+        by {% for author in book.authors.all %}{{ author.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+      </p>
+
+      <p>
+        {% for genre in book.genres.all %}
+          <span class="badge text-bg-light border">{{ genre.name }}</span>
+        {% endfor %}
+      </p>
+
+      <dl class="row">
+        <dt class="col-sm-3">Published</dt>
+        <dd class="col-sm-9">{{ book.publication_year }}</dd>
+        {% if book.isbn %}
+          <dt class="col-sm-3">ISBN</dt>
+          <dd class="col-sm-9">{{ book.isbn }}</dd>
+        {% endif %}
+        <dt class="col-sm-3">Availability</dt>
+        <dd class="col-sm-9">
+          {% if book.is_available %}
+            <span class="badge text-bg-success">Available</span>
+            {{ book.available_copies }} of {{ book.total_copies }} copies
+          {% else %}
+            <span class="badge text-bg-secondary">Unavailable</span>
+          {% endif %}
+        </dd>
+      </dl>
+
+      {% if book.summary %}
+        <h2 class="h5">Summary</h2>
+        <p>{{ book.summary|linebreaks }}</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

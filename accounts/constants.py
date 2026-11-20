@@ -1,0 +1,1 @@
+STAFF_GROUP_NAME = "Library staff"

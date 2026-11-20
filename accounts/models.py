@@ -1,5 +1,7 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, Group
 from django.db import models
+
+from .constants import STAFF_GROUP_NAME
 
 
 class User(AbstractUser):
@@ -24,6 +26,16 @@ class User(AbstractUser):
         if not self.is_superuser:
             self.is_staff = self.role in (self.Role.STAFF, self.Role.ADMIN)
         super().save(*args, **kwargs)
+        self._sync_staff_group()
+
+    def _sync_staff_group(self):
+        group = Group.objects.filter(name=STAFF_GROUP_NAME).first()
+        if group is None:
+            return
+        if self.role in (self.Role.STAFF, self.Role.ADMIN):
+            self.groups.add(group)
+        else:
+            self.groups.remove(group)
 
     def __str__(self):
         return self.username
