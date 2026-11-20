@@ -1,7 +1,9 @@
 from django.test import TestCase
 from django.urls import reverse
-
 from .models import User
+from django.core.management import call_command
+from django.contrib.auth.models import Group
+from .constants import STAFF_GROUP_NAME
 
 
 class AuthTests(TestCase):
@@ -30,3 +32,19 @@ class AuthTests(TestCase):
     def test_profile_requires_login(self):
         response = self.client.get(reverse("accounts:profile"))
         self.assertEqual(response.status_code, 302)
+
+class StaffGroupTests(TestCase):
+    def setUp(self):
+        call_command("setup_roles")
+
+    def test_staff_user_joins_group_and_gets_book_permissions(self):
+        user = User.objects.create_user("sara", password="x", role=User.Role.STAFF)
+        self.assertTrue(user.groups.filter(name=STAFF_GROUP_NAME).exists())
+        self.assertTrue(user.has_perm("books.add_book"))
+        self.assertTrue(user.has_perm("books.change_book"))
+        self.assertFalse(user.has_perm("books.delete_book"))
+
+    def test_customer_is_not_in_staff_group(self):
+        user = User.objects.create_user("omid", password="x")
+        self.assertFalse(user.groups.filter(name=STAFF_GROUP_NAME).exists())
+        self.assertFalse(user.has_perm("books.add_book"))
