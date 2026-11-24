@@ -11,8 +11,8 @@ STAFF_PERMISSIONS = [
     ("books", "genre", ("add", "change", "view")),
     ("books", "book", ("add", "change", "view")),
     ("reservations", "reservation", ("change", "view")),
+    ("reviews", "review", ("change", "view")),
 ]
-
 
 class Command(BaseCommand):
     help = "Create the 'Library staff' group, assign permissions and sync members."

@@ -11,6 +11,7 @@ urlpatterns = [
     path("books/", include("books.urls")),
     path("", RedirectView.as_view(pattern_name="books:list"), name="home"),
     path("reservations/", include("reservations.urls")),
+    path("reviews/", include("reviews.urls")),
 ]
 
 if settings.DEBUG:
