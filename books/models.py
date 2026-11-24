@@ -3,10 +3,18 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import ExpressionWrapper, F, IntegerField, Value
-from django.db.models.functions import Greatest
 from django.urls import reverse
 from django.utils import timezone
+from django.db.models import (
+    Count,
+    ExpressionWrapper,
+    F,
+    IntegerField,
+    OuterRef,
+    Subquery,
+    Value,
+)
+from django.db.models.functions import Coalesce, Greatest
 
 
 class Author(models.Model):
@@ -37,9 +45,25 @@ class BookQuerySet(models.QuerySet):
 
     def with_availability(self):
         """Annotate each book with reserved_count and available_count."""
+        # Imported here to avoid a circular import at module load time
+        from reservations.models import Reservation
+
+        # A subquery (not a JOIN) so other joins, like authors or genres
+        # filters, never inflate the count.
+        active = (
+            Reservation.objects.active()
+            .filter(book=OuterRef("pk"))
+            .order_by()
+            .values("book")
+            .annotate(total=Count("pk"))
+            .values("total")
+        )
         return self.annotate(
-            # Phase 4 will replace Value(0) with a count of active reservations
-            reserved_count=Value(0, output_field=IntegerField()),
+            reserved_count=Coalesce(
+                Subquery(active, output_field=IntegerField()),
+                Value(0),
+                output_field=IntegerField(),
+            ),
         ).annotate(
             available_count=Greatest(
                 ExpressionWrapper(
@@ -100,8 +124,7 @@ class Book(models.Model):
 
     # Availability is always computed, never stored
     def active_reservation_count(self):
-        # Phase 4 will count active reservations here.
-        return 0
+        return self.reservations.active().count()
 
     @property
     def available_copies(self):

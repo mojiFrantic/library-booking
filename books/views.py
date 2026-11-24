@@ -2,6 +2,7 @@ from django.views.generic import DetailView, ListView
 
 from .filters import BookFilter
 from .models import Book
+from reservations.models import Reservation
 
 
 class BookListView(ListView):
@@ -39,3 +40,13 @@ class BookDetailView(DetailView):
             .with_availability()
             .prefetch_related("authors", "genres")
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        context["user_reservation"] = (
+            Reservation.objects.active().filter(user=user, book=self.object).first()
+            if user.is_authenticated
+            else None
+        )
+        return context
