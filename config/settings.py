@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import sys
 from pathlib import Path
 from decouple import config
+from django.contrib.messages import constants as message_constants
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -150,3 +151,13 @@ LOGOUT_REDIRECT_URL = "home"
 
 # Captcha is auto-accepted while running tests
 CAPTCHA_TEST_MODE = "test" in sys.argv
+
+# Bootstrap alert colors for Django messages
+MESSAGE_TAGS = {message_constants.ERROR: "danger"}
+
+# Reservation rules
+RESERVATION_PICKUP_HOURS = 48
+LOAN_PERIOD_DAYS = 14
+MAX_ACTIVE_RESERVATIONS = 3
+MAX_RENEWALS = 1
+RENEWAL_DAYS = 14
