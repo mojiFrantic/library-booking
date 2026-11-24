@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     # third party
     "rest_framework",
     "captcha",
+    "django_filters",
+    "django.contrib.postgres",
     # local
     "accounts",
     "books",
