@@ -1,7 +1,7 @@
 import django_filters
 from django import forms
 from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
-from django.db.models import Q
+from django.db.models import Q, F
 
 from .models import Author, Book, Genre
 
@@ -11,6 +11,8 @@ SORT_CHOICES = [
     ("-publication_year", "Newest published"),
     ("publication_year", "Oldest published"),
     ("-created_at", "Recently added"),
+    ("popular", "Most popular"),
+    ("top_rated", "Top rated"),
     ("relevance", "Best match"),
 ]
 
@@ -99,4 +101,10 @@ class BookFilter(django_filters.FilterSet):
             if "search_rank" in queryset.query.annotations:
                 return queryset.order_by("-search_rank", "title")
             return queryset.order_by("title")
+        if value == "popular":
+            return queryset.order_by("-borrow_count", "title")
+        if value == "top_rated":
+            return queryset.order_by(
+                F("average_rating").desc(nulls_last=True), "-review_count", "title"
+            )
         return queryset.order_by(value, "title")

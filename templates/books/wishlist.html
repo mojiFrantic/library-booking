@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}My wishlist{% endblock %}
+{% block main_class %}{% endblock %}
+{% block content %}
+  <h1 class="mb-4">My wishlist</h1>
+
+  {% if books %}
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4">
+      {% for book in books %}
+        <div class="col">
+          {% include "books/_book_card.html" %}
+          <form method="post" action="{% url 'books:wishlist_toggle' book.pk %}" class="mt-2">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'books:wishlist' %}">
+            <button class="btn btn-sm btn-outline-danger w-100">Remove from wishlist</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+    {% include "books/_pagination.html" %}
+  {% else %}
+    <p class="text-muted">Your wishlist is empty. <a href="{% url 'books:list' %}">Browse books</a></p>
+  {% endif %}
+{% endblock %}

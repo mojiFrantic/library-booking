@@ -48,27 +48,7 @@
     <p class="text-muted small">{{ page_obj.paginator.count }} book{{ page_obj.paginator.count|pluralize }} found</p>
     <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4">
       {% for book in books %}
-        <div class="col">
-          <div class="card h-100">
-            {% if book.cover %}
-              <img src="{{ book.cover.url }}" class="card-img-top" alt="Cover of {{ book.title }}">
-            {% endif %}
-            <div class="card-body">
-              <h5 class="card-title">
-                <a href="{{ book.get_absolute_url }}" class="stretched-link text-decoration-none">{{ book.title }}</a>
-              </h5>
-              <p class="card-text text-muted mb-2">
-                {% for author in book.authors.all %}{{ author.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
-              </p>
-              <p class="card-text small text-muted mb-2">{{ book.publication_year }}</p>
-              {% if book.is_available %}
-                <span class="badge text-bg-success">Available ({{ book.available_copies }} of {{ book.total_copies }})</span>
-              {% else %}
-                <span class="badge text-bg-secondary">Unavailable</span>
-              {% endif %}
-            </div>
-          </div>
-        </div>
+        <div class="col">{% include "books/_book_card.html" %}</div>
       {% endfor %}
     </div>
     {% include "books/_pagination.html" %}

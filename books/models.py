@@ -1,20 +1,23 @@
 from datetime import date
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.urls import reverse
-from django.utils import timezone
 from django.db.models import (
+    Avg,
     Count,
     ExpressionWrapper,
     F,
+    FloatField,
     IntegerField,
     OuterRef,
     Subquery,
     Value,
 )
 from django.db.models.functions import Coalesce, Greatest
+from django.urls import reverse
+from django.utils import timezone
 
 
 class Author(models.Model):
@@ -38,32 +41,38 @@ class Genre(models.Model):
         return self.name
 
 
+def _count_by_book(queryset):
+    """Subquery expression: how many rows of `queryset` each book has.
+
+    A subquery (not a JOIN) so other joins, like author or genre filters,
+    never inflate the numbers.
+    """
+    return Coalesce(
+        Subquery(
+            queryset.filter(book=OuterRef("pk"))
+            .order_by()
+            .values("book")
+            .annotate(total=Count("pk"))
+            .values("total"),
+            output_field=IntegerField(),
+        ),
+        Value(0),
+        output_field=IntegerField(),
+    )
+
+
 class BookQuerySet(models.QuerySet):
     def active(self):
         """Books that are not soft-deleted."""
         return self.filter(is_deleted=False)
 
     def with_availability(self):
-        """Annotate each book with reserved_count and available_count."""
-        # Imported here to avoid a circular import at module load time
+        """Annotate reserved_count and available_count."""
+        # Imported here to avoid circular imports at module load time
         from reservations.models import Reservation
 
-        # A subquery (not a JOIN) so other joins, like authors or genres
-        # filters, never inflate the count.
-        active = (
-            Reservation.objects.active()
-            .filter(book=OuterRef("pk"))
-            .order_by()
-            .values("book")
-            .annotate(total=Count("pk"))
-            .values("total")
-        )
         return self.annotate(
-            reserved_count=Coalesce(
-                Subquery(active, output_field=IntegerField()),
-                Value(0),
-                output_field=IntegerField(),
-            ),
+            reserved_count=_count_by_book(Reservation.objects.active()),
         ).annotate(
             available_count=Greatest(
                 ExpressionWrapper(
@@ -74,6 +83,39 @@ class BookQuerySet(models.QuerySet):
                 output_field=IntegerField(),
             ),
         )
+
+    def with_ratings(self):
+        """Annotate average_rating (None if no reviews) and review_count.
+
+        Hidden reviews are ignored.
+        """
+        from reviews.models import Review
+
+        visible = Review.objects.filter(is_hidden=False)
+        average = Subquery(
+            visible.filter(book=OuterRef("pk"))
+            .order_by()
+            .values("book")
+            .annotate(avg=Avg("rating"))
+            .values("avg"),
+            output_field=FloatField(),
+        )
+        return self.annotate(
+            average_rating=average,
+            review_count=_count_by_book(visible),
+        )
+
+    def with_popularity(self):
+        """Annotate borrow_count: how many times the book was borrowed."""
+        from reservations.models import Reservation
+
+        borrowed = Reservation.objects.filter(
+            status__in=[
+                Reservation.Status.CHECKED_OUT,
+                Reservation.Status.RETURNED,
+            ]
+        )
+        return self.annotate(borrow_count=_count_by_book(borrowed))
 
 
 class Book(models.Model):
@@ -146,3 +188,26 @@ class Book(models.Model):
         self.is_deleted = False
         self.deleted_at = None
         self.save(update_fields=["is_deleted", "deleted_at", "updated_at"])
+
+
+class WishlistItem(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="wishlist_items",
+    )
+    book = models.ForeignKey(
+        Book, on_delete=models.CASCADE, related_name="wishlist_items"
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-added_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "book"], name="unique_wishlist_item"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user} ♥ {self.book}"

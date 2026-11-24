@@ -1,10 +1,73 @@
 {% extends "base.html" %}
 {% block title %}Profile{% endblock %}
+{% block main_class %}{% endblock %}
 {% block content %}
-  <h2>Profile</h2>
-  <p>Username: {{ user.username }}</p>
-  <p>Role: {{ user.get_role_display }}</p>
+  <h2 class="mb-4">Profile</h2>
+
+  <dl class="row">
+    <dt class="col-sm-2">Username</dt>
+    <dd class="col-sm-10">{{ user.username }}</dd>
+    {% if user.email %}
+      <dt class="col-sm-2">Email</dt>
+      <dd class="col-sm-10">{{ user.email }}</dd>
+    {% endif %}
+    <dt class="col-sm-2">Role</dt>
+    <dd class="col-sm-10">{{ user.get_role_display }}</dd>
+  </dl>
+
   {% if user.is_library_staff %}
-    <a href="{% url 'admin:index' %}" class="btn btn-outline-dark">Admin panel</a>
+    <a href="{% url 'admin:index' %}" class="btn btn-outline-dark mb-4">Admin panel</a>
+  {% endif %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-4">
+      <div class="card card-body text-center">
+        <div class="fs-3">{{ active_loans|length }}</div>
+        <div class="small text-muted">Books borrowed now</div>
+      </div>
+    </div>
+    <div class="col-4">
+      <a href="{% url 'books:wishlist' %}" class="text-decoration-none">
+        <div class="card card-body text-center">
+          <div class="fs-3">{{ wishlist_count }}</div>
+          <div class="small text-muted">Wishlist</div>
+        </div>
+      </a>
+    </div>
+    <div class="col-4">
+      <div class="card card-body text-center">
+        <div class="fs-3">{{ review_count }}</div>
+        <div class="small text-muted">Reviews written</div>
+      </div>
+    </div>
+  </div>
+
+  {% if active_loans %}
+    <h3 class="h5">Currently borrowed</h3>
+    <ul class="list-group mb-4">
+      {% for r in active_loans %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <a href="{{ r.book.get_absolute_url }}">{{ r.book.title }}</a>
+          <span class="{% if r.is_overdue %}text-danger{% else %}text-muted{% endif %} small">
+            Due {{ r.due_date|date:"M d, Y" }}{% if r.is_overdue %} (overdue){% endif %}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <h3 class="h5">Recent activity</h3>
+  {% if recent_reservations %}
+    <ul class="list-group mb-2">
+      {% for r in recent_reservations %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ r.book.title }}</span>
+          <span class="text-muted small">{{ r.status_label }} &middot; {{ r.reserved_at|date:"M d, Y" }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+    <a href="{% url 'reservations:mine' %}">View full history</a>
+  {% else %}
+    <p class="text-muted">No reservations yet.</p>
   {% endif %}
 {% endblock %}
