@@ -3,6 +3,8 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import ExpressionWrapper, F, IntegerField, Value
+from django.db.models.functions import Greatest
 from django.urls import reverse
 from django.utils import timezone
 
@@ -32,6 +34,22 @@ class BookQuerySet(models.QuerySet):
     def active(self):
         """Books that are not soft-deleted."""
         return self.filter(is_deleted=False)
+
+    def with_availability(self):
+        """Annotate each book with reserved_count and available_count."""
+        return self.annotate(
+            # Phase 4 will replace Value(0) with a count of active reservations
+            reserved_count=Value(0, output_field=IntegerField()),
+        ).annotate(
+            available_count=Greatest(
+                ExpressionWrapper(
+                    F("total_copies") - F("reserved_count"),
+                    output_field=IntegerField(),
+                ),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+        )
 
 
 class Book(models.Model):
@@ -87,6 +105,9 @@ class Book(models.Model):
 
     @property
     def available_copies(self):
+        annotated = getattr(self, "available_count", None)
+        if annotated is not None:
+            return annotated
         return max(self.total_copies - self.active_reservation_count(), 0)
 
     @property
