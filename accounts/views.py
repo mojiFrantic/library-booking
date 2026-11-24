@@ -7,6 +7,8 @@ from django.utils.decorators import method_decorator
 from django.views.generic import CreateView, TemplateView
 from django_ratelimit.decorators import ratelimit
 
+from reservations.models import Reservation
+
 from .forms import LoginForm, RegisterForm
 
 
@@ -35,3 +37,15 @@ class UserLoginView(LoginView):
 
 class ProfileView(LoginRequiredMixin, TemplateView):
     template_name = "accounts/profile.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        reservations = Reservation.objects.filter(user=user).select_related("book")
+        context["active_loans"] = reservations.filter(
+            status=Reservation.Status.CHECKED_OUT
+        )
+        context["recent_reservations"] = reservations[:5]
+        context["wishlist_count"] = user.wishlist_items.count()
+        context["review_count"] = user.reviews.count()
+        return context
