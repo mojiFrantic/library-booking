@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}My reservations{% endblock %}
+{% block main_class %}{% endblock %}
+{% block content %}
+  <h1 class="mb-4">My reservations</h1>
+
+  {% if reservations %}
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Book</th>
+            <th>Status</th>
+            <th>Reserved</th>
+            <th>Pick up before / Due</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in reservations %}
+            <tr>
+              <td>
+                {% if r.book.is_deleted %}
+                  {{ r.book.title }}
+                {% else %}
+                  <a href="{{ r.book.get_absolute_url }}">{{ r.book.title }}</a>
+                {% endif %}
+              </td>
+              <td>
+                {% if r.is_overdue %}
+                  <span class="badge text-bg-danger">Overdue</span>
+                {% elif r.is_pickup_expired or r.status == "expired" %}
+                  <span class="badge text-bg-secondary">Expired</span>
+                {% elif r.status == "pending" %}
+                  <span class="badge text-bg-warning">Waiting for pickup</span>
+                {% elif r.status == "checked_out" %}
+                  <span class="badge text-bg-primary">Checked out</span>
+                {% elif r.status == "returned" %}
+                  <span class="badge text-bg-success">Returned</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">{{ r.get_status_display }}</span>
+                {% endif %}
+              </td>
+              <td>{{ r.reserved_at|date:"M d, Y H:i" }}</td>
+              <td>
+                {% if r.status == "pending" %}
+                  {{ r.pickup_deadline|date:"M d, Y H:i" }}
+                {% elif r.status == "checked_out" %}
+                  {{ r.due_date|date:"M d, Y" }}
+                  {% if r.renewal_count %}<span class="text-muted small">(renewed)</span>{% endif %}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+              <td class="text-end">
+                {% if r.can_cancel %}
+                  <form method="post" action="{% url 'reservations:cancel' r.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-outline-danger">Cancel</button>
+                  </form>
+                {% endif %}
+                {% if r.can_renew %}
+                  <form method="post" action="{% url 'reservations:renew' r.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-outline-primary">Renew</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "books/_pagination.html" %}
+  {% else %}
+    <p class="text-muted">You have no reservations yet. <a href="{% url 'books:list' %}">Browse books</a></p>
+  {% endif %}
+{% endblock %}

@@ -14,6 +14,7 @@
     <div class="d-flex gap-2 align-items-center">
       <a href="{% url 'books:list' %}" class="btn btn-sm btn-link">Books</a>
       {% if user.is_authenticated %}
+        <a href="{% url 'reservations:mine' %}" class="btn btn-sm btn-link">My reservations</a>
         <a href="{% url 'accounts:profile' %}" class="btn btn-sm btn-outline-secondary">{{ user.username }}</a>
         <form method="post" action="{% url 'accounts:logout' %}">
           {% csrf_token %}
@@ -27,6 +28,11 @@
   </div>
 </nav>
 <main class="container {% block main_class %}auth-narrow{% endblock %}">
+    {% if messages %}
+      {% for message in messages %}
+       <div class="alert alert-{{ message.tags }}" role="alert">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
   {% block content %}{% endblock %}
 </main>
 </body>
