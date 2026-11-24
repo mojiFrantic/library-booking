@@ -10,6 +10,7 @@ STAFF_PERMISSIONS = [
     ("books", "author", ("add", "change", "view")),
     ("books", "genre", ("add", "change", "view")),
     ("books", "book", ("add", "change", "view")),
+    ("reservations", "reservation", ("change", "view")),
 ]
 
 
