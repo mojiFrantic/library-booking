@@ -1,8 +1,15 @@
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
-from .models import Author, Book, Genre
+from reservations.models import Reservation
+from reviews.models import Review
 
+from .models import Author, Book, Genre, WishlistItem
+from .selectors import similar_books
 
 def make_book(title="Test Book", **kwargs):
     defaults = {"publication_year": 2000, "total_copies": 2}
@@ -127,3 +134,93 @@ class BookFilterTests(TestCase):
             book.genres.add(self.fantasy)
         response = self.client.get(reverse("books:list"), {"genre": self.fantasy.pk})
         self.assertContains(response, f"page=2&amp;genre={self.fantasy.pk}")
+
+User = get_user_model()
+
+
+class WishlistTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("ali", password="pass12345")
+        self.book = make_book("Wish Me")
+        self.url = reverse("books:wishlist_toggle", args=[self.book.pk])
+
+    def test_toggle_requires_login(self):
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(WishlistItem.objects.count(), 0)
+
+    def test_toggle_adds_then_removes(self):
+        self.client.force_login(self.user)
+        self.client.post(self.url)
+        self.assertEqual(WishlistItem.objects.count(), 1)
+        self.client.post(self.url)
+        self.assertEqual(WishlistItem.objects.count(), 0)
+
+    def test_wishlist_page_lists_only_my_books(self):
+        other = User.objects.create_user("sara", password="pass12345")
+        WishlistItem.objects.create(user=self.user, book=self.book)
+        WishlistItem.objects.create(user=other, book=make_book("Not Mine"))
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("books:wishlist"))
+        self.assertContains(response, "Wish Me")
+        self.assertNotContains(response, "Not Mine")
+
+    def test_next_redirect_cannot_leave_the_site(self):
+        self.client.force_login(self.user)
+        response = self.client.post(self.url, {"next": "https://evil.example/"})
+        self.assertEqual(response["Location"], self.book.get_absolute_url())
+
+
+class SimilarBooksTests(TestCase):
+    def test_ranking_by_shared_genres_and_authors(self):
+        g1, g2 = Genre.objects.create(name="G1"), Genre.objects.create(name="G2")
+        a1 = Author.objects.create(name="A1")
+
+        main = make_book("Main")
+        main.genres.set([g1, g2])
+        main.authors.set([a1])
+
+        both_genres = make_book("Both genres")
+        both_genres.genres.set([g1, g2])
+
+        one_genre = make_book("One genre")
+        one_genre.genres.set([g1])
+
+        same_author = make_book("Same author")
+        same_author.authors.set([a1])
+
+        unrelated = make_book("Unrelated")
+
+        titles = [b.title for b in similar_books(main)]
+        # Same author (2) ties with both genres (2); title breaks the tie
+        self.assertEqual(titles, ["Both genres", "Same author", "One genre"])
+        self.assertNotIn("Unrelated", titles)
+        self.assertNotIn("Main", titles)
+
+    def test_book_without_genres_or_authors_has_no_similar_books(self):
+        self.assertEqual(similar_books(make_book("Lonely")), [])
+
+
+class CommunitySortTests(TestCase):
+    def titles(self, **params):
+        response = self.client.get(reverse("books:list"), params)
+        self.assertEqual(response.status_code, 200)
+        return [b.title for b in response.context["books"]]
+
+    def test_top_rated_sort_puts_unrated_books_last(self):
+        great, okay, unrated = make_book("Great"), make_book("Okay"), make_book("Unrated")
+        u1 = User.objects.create_user("u1", password="x")
+        Review.objects.create(user=u1, book=great, rating=5)
+        Review.objects.create(user=u1, book=okay, rating=3)
+        self.assertEqual(self.titles(sort="top_rated"), ["Great", "Okay", "Unrated"])
+
+    def test_popular_sort_uses_borrow_counts(self):
+        popular, quiet, never = make_book("Popular"), make_book("Quiet"), make_book("Never")
+        deadline = timezone.now() + timedelta(hours=1)
+        for i, book in enumerate([popular, popular, quiet]):
+            user = User.objects.create_user(f"reader{i}", password="x")
+            Reservation.objects.create(
+                user=user, book=book,
+                status=Reservation.Status.CHECKED_OUT, pickup_deadline=deadline,
+            )
+        self.assertEqual(self.titles(sort="popular"), ["Popular", "Quiet", "Never"])

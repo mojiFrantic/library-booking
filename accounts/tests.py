@@ -48,3 +48,10 @@ class StaffGroupTests(TestCase):
         user = User.objects.create_user("omid", password="x")
         self.assertFalse(user.groups.filter(name=STAFF_GROUP_NAME).exists())
         self.assertFalse(user.has_perm("books.add_book"))
+
+class ProfilePageTests(TestCase):
+    def test_profile_page_renders_for_logged_in_user(self):
+        user = User.objects.create_user("ali", password="pass12345")
+        self.client.force_login(user)
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertContains(response, "Recent activity")
