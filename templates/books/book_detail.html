@@ -11,8 +11,17 @@
     {% endif %}
     <div class="col">
       <h1>{{ book.title }}</h1>
-      <p class="text-muted">
+      <p class="text-muted mb-1">
         by {% for author in book.authors.all %}{{ author.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+      </p>
+      <p class="mb-2">
+        {% if book.review_count %}
+          <span class="text-warning">&#9733;</span>
+          <strong>{{ book.average_rating|floatformat:1 }}</strong> / 5
+          <a href="#reviews" class="text-muted small">({{ book.review_count }} review{{ book.review_count|pluralize }})</a>
+        {% else %}
+          <a href="#reviews" class="text-muted small">No reviews yet</a>
+        {% endif %}
       </p>
 
       <p>
@@ -39,7 +48,7 @@
         </dd>
       </dl>
 
-      <div class="mb-4">
+      <div class="mb-4 d-flex flex-wrap gap-2 align-items-start">
         {% if user_reservation %}
           <div class="alert alert-info mb-0">
             You have reserved this book.
@@ -55,6 +64,15 @@
         {% else %}
           <button class="btn btn-secondary" disabled>Currently unavailable</button>
         {% endif %}
+
+        {% if user.is_authenticated %}
+          <form method="post" action="{% url 'books:wishlist_toggle' book.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-secondary">
+              {% if in_wishlist %}Remove from wishlist{% else %}Add to wishlist{% endif %}
+            </button>
+          </form>
+        {% endif %}
       </div>
 
       {% if book.summary %}
@@ -63,4 +81,63 @@
       {% endif %}
     </div>
   </div>
+
+  <hr class="my-5">
+
+  <section id="reviews">
+    <h2 class="h4 mb-3">Reviews</h2>
+
+    {% if user.is_authenticated %}
+      {% if my_review.is_hidden %}
+        <div class="alert alert-warning">Your review is currently hidden by library staff.</div>
+      {% endif %}
+      <div class="card card-body mb-4">
+        <h3 class="h6">{% if my_review %}Edit your review{% else %}Write a review{% endif %}</h3>
+        <form method="post" action="{% url 'reviews:save' book.pk %}">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label" for="{{ review_form.rating.id_for_label }}">Rating</label>
+            {{ review_form.rating }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="{{ review_form.text.id_for_label }}">Comment</label>
+            {{ review_form.text }}
+          </div>
+          <button class="btn btn-primary">{% if my_review %}Update review{% else %}Post review{% endif %}</button>
+        </form>
+        {% if my_review %}
+          <form method="post" action="{% url 'reviews:delete' book.pk %}" class="mt-2">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-danger">Delete my review</button>
+          </form>
+        {% endif %}
+      </div>
+    {% else %}
+      <p><a href="{% url 'accounts:login' %}?next={{ request.path }}">Log in</a> to write a review.</p>
+    {% endif %}
+
+    {% for review in reviews %}
+      <div class="border-bottom py-3">
+        <div>
+          <span class="text-warning">&#9733;</span> <strong>{{ review.rating }}/5</strong>
+          <span class="text-muted small ms-2">{{ review.user.username }} &middot; {{ review.created_at|date:"M d, Y" }}</span>
+        </div>
+        {% if review.text %}<div>{{ review.text|linebreaksbr }}</div>{% endif %}
+      </div>
+    {% empty %}
+      <p class="text-muted">No reviews yet. Be the first to review this book.</p>
+    {% endfor %}
+  </section>
+
+  {% if similar_books %}
+    <hr class="my-5">
+    <section>
+      <h2 class="h4 mb-3">Similar books</h2>
+      <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4">
+        {% for book in similar_books %}
+          <div class="col">{% include "books/_book_card.html" %}</div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
 {% endblock %}
