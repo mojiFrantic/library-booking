@@ -54,6 +54,15 @@
             You have reserved this book.
             <a href="{% url 'reservations:mine' %}" class="alert-link">View my reservations</a>
           </div>
+        {% elif user_hold %}
+          <div class="alert alert-success mb-0">
+            <strong>A copy is being held for you!</strong>
+            Reserve it before {{ user_hold.claim_deadline|date:"M d, Y H:i" }}.
+            <form method="post" action="{% url 'reservations:reserve' book.pk %}" class="mt-2">
+              {% csrf_token %}
+              <button class="btn btn-success btn-sm">Reserve now</button>
+            </form>
+          </div>
         {% elif not user.is_authenticated %}
           <a href="{% url 'accounts:login' %}?next={{ request.path }}" class="btn btn-primary">Log in to reserve</a>
         {% elif book.is_available %}
@@ -61,8 +70,24 @@
             {% csrf_token %}
             <button class="btn btn-primary">Reserve this book</button>
           </form>
+        {% elif user_waitlist_entry %}
+          <div class="alert alert-secondary mb-0">
+            You are number {{ user_waitlist_entry.position }} in the waitlist.
+            <form method="post" action="{% url 'reservations:waitlist_leave' user_waitlist_entry.pk %}" class="mt-2">
+              {% csrf_token %}
+              <button class="btn btn-outline-secondary btn-sm">Leave waitlist</button>
+            </form>
+          </div>
         {% else %}
-          <button class="btn btn-secondary" disabled>Currently unavailable</button>
+          <form method="post" action="{% url 'reservations:waitlist_join' book.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-secondary">Join the waitlist</button>
+          </form>
+          {% if waitlist_length %}
+            <span class="text-muted small align-self-center">
+              {{ waitlist_length }} {{ waitlist_length|pluralize:"person,people" }} waiting
+            </span>
+          {% endif %}
         {% endif %}
 
         {% if user.is_authenticated %}
