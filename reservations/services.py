@@ -7,13 +7,22 @@ from django.utils import timezone
 
 from books.models import Book
 
-from .models import Reservation
+from . import fines, waitlist
+from .errors import ReservationError
+from .models import Reservation, WaitlistEntry
 
 Status = Reservation.Status
 
-
-class ReservationError(Exception):
-    """A business rule prevented the action. The message is safe to show."""
+__all__ = [
+    "ReservationError",
+    "reserve_book",
+    "cancel_reservation",
+    "check_out",
+    "check_in",
+    "renew_reservation",
+    "expire_stale_pickups",
+    "run_maintenance",
+]
 
 
 def _get_locked(reservation_id, user=None):
@@ -45,6 +54,13 @@ def reserve_book(user, book_id):
         book=book, status=Status.PENDING, pickup_deadline__lte=now
     ).update(status=Status.EXPIRED, updated_at=now)
 
+    # Expire lapsed claims and offer free copies to the people in line
+    # before counting, so newcomers cannot jump ahead of the queue.
+    waitlist.promote_locked(book, now)
+
+    if fines.fine_summary(user).is_blocked:
+        raise ReservationError(fines.BLOCKED_MESSAGE)
+
     active = Reservation.objects.active()
 
     if active.filter(user=user, book=book).exists():
@@ -56,14 +72,24 @@ def reserve_book(user, book_id):
             "active reservations."
         )
 
-    if active.filter(book=book).count() >= book.total_copies:
+    # A copy held for this very user does not count against them
+    own_hold = WaitlistEntry.objects.holding().filter(user=user, book=book).first()
+    taken = (
+        active.filter(book=book).count()
+        + WaitlistEntry.objects.holding().filter(book=book).exclude(user=user).count()
+    )
+    if taken >= book.total_copies:
         raise ReservationError("No copies of this book are available right now.")
 
-    return Reservation.objects.create(
+    reservation = Reservation.objects.create(
         user=user,
         book=book,
         pickup_deadline=now + timedelta(hours=settings.RESERVATION_PICKUP_HOURS),
     )
+    if own_hold is not None:
+        own_hold.status = WaitlistEntry.Status.FULFILLED
+        own_hold.save(update_fields=["status", "updated_at"])
+    return reservation
 
 
 @transaction.atomic
@@ -75,6 +101,7 @@ def cancel_reservation(reservation_id, user):
         )
     reservation.status = Status.CANCELLED
     reservation.save(update_fields=["status", "updated_at"])
+    waitlist.promote_waitlist(reservation.book_id)
     return reservation
 
 
@@ -106,6 +133,9 @@ def check_in(reservation_id):
     reservation.status = Status.RETURNED
     reservation.returned_at = timezone.now()
     reservation.save(update_fields=["status", "returned_at", "updated_at"])
+
+    fines.create_fine_for_return(reservation)
+    waitlist.promote_waitlist(reservation.book_id)
     return reservation
 
 
@@ -118,6 +148,10 @@ def renew_reservation(reservation_id, user):
         raise ReservationError("Overdue books cannot be renewed. Please return it.")
     if reservation.renewal_count >= settings.MAX_RENEWALS:
         raise ReservationError("This loan has reached the maximum number of renewals.")
+    if WaitlistEntry.objects.open().filter(book_id=reservation.book_id).exists():
+        raise ReservationError(
+            "Other readers are waiting for this book, so it cannot be renewed."
+        )
     reservation.due_date += timedelta(days=settings.RENEWAL_DAYS)
     reservation.renewal_count += 1
     reservation.save(update_fields=["due_date", "renewal_count", "updated_at"])
@@ -130,3 +164,10 @@ def expire_stale_pickups():
     return Reservation.objects.filter(
         status=Status.PENDING, pickup_deadline__lte=now
     ).update(status=Status.EXPIRED, updated_at=now)
+
+
+def run_maintenance():
+    """Periodic job. Returns (expired_pickups, expired_claims, promoted)."""
+    pickups = expire_stale_pickups()
+    claims, promoted = waitlist.process_waitlist()
+    return pickups, claims, promoted
