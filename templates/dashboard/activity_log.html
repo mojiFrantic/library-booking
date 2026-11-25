@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Activity log{% endblock %}
+{% block main_class %}{% endblock %}
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <h1 class="mb-0">Activity log</h1>
+    <a href="{% url 'dashboard:home' %}" class="btn btn-outline-secondary btn-sm">&larr; Dashboard</a>
+  </div>
+
+  <form method="get" class="row g-2 mb-4">
+    <div class="col-12 col-md-4">
+      <select name="action" class="form-select" aria-label="Filter by action">
+        <option value="">All actions</option>
+        {% for value, label in action_choices %}
+          <option value="{{ value }}" {% if value == selected_action %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <button class="btn btn-primary">Filter</button>
+      <a href="{% url 'dashboard:activity' %}" class="btn btn-outline-secondary">Reset</a>
+    </div>
+  </form>
+
+  {% if entries %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr><th>When</th><th>Who</th><th>Action</th><th>Object</th><th>Details</th></tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+            <tr>
+              <td class="text-nowrap">{{ entry.created_at|date:"M d, Y H:i" }}</td>
+              <td>{{ entry.actor.username|default:"(deleted user)" }}</td>
+              <td>{{ entry.get_action_display }}</td>
+              <td>{{ entry.object_repr }}</td>
+              <td class="text-muted small">{{ entry.details }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "books/_pagination.html" %}
+  {% else %}
+    <p class="text-muted">No activity matches this filter.</p>
+  {% endif %}
+{% endblock %}
