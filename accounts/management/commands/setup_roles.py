@@ -14,6 +14,7 @@ STAFF_PERMISSIONS = [
     ("reservations", "waitlistentry", ("view",)),
     ("reservations", "fine", ("change", "view")),
     ("reviews", "review", ("change", "view")),
+    ("dashboard", "activitylog", ("view",)),
 ]
 
 class Command(BaseCommand):

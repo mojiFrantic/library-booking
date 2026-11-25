@@ -1,12 +1,11 @@
 from datetime import timedelta
-
+from dashboard.activity import log_activity
+from dashboard.models import ActivityLog
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
-
 from books.models import Book
-
 from . import fines, waitlist
 from .errors import ReservationError
 from .models import Reservation, WaitlistEntry
@@ -106,7 +105,7 @@ def cancel_reservation(reservation_id, user):
 
 
 @transaction.atomic
-def check_out(reservation_id):
+def check_out(reservation_id, actor=None):
     """Staff action: the customer picked up the book."""
     reservation = _get_locked(reservation_id)
     if reservation.status != Status.PENDING:
@@ -121,11 +120,18 @@ def check_out(reservation_id):
     reservation.save(
         update_fields=["status", "checked_out_at", "due_date", "updated_at"]
     )
+    if actor is not None:
+        log_activity(
+            actor,
+            ActivityLog.Action.CHECKED_OUT,
+            reservation,
+            details=f"Due {reservation.due_date:%b %d, %Y}",
+        )
     return reservation
 
 
 @transaction.atomic
-def check_in(reservation_id):
+def check_in(reservation_id, actor=None):
     """Staff action: the customer returned the book."""
     reservation = _get_locked(reservation_id)
     if reservation.status != Status.CHECKED_OUT:
@@ -134,10 +140,16 @@ def check_in(reservation_id):
     reservation.returned_at = timezone.now()
     reservation.save(update_fields=["status", "returned_at", "updated_at"])
 
-    fines.create_fine_for_return(reservation)
+    fine = fines.create_fine_for_return(reservation)
     waitlist.promote_waitlist(reservation.book_id)
+    if actor is not None:
+        details = (
+            f"Late fine recorded: {fine.amount} ({fine.days_overdue} days overdue)"
+            if fine
+            else ""
+        )
+        log_activity(actor, ActivityLog.Action.RETURNED, reservation, details=details)
     return reservation
-
 
 @transaction.atomic
 def renew_reservation(reservation_id, user):

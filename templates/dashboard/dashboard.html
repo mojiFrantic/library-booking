@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Staff dashboard{% endblock %}
+{% block main_class %}{% endblock %}
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <h1 class="mb-0">Staff dashboard</h1>
+    <div class="d-flex gap-2">
+      <a href="{% url 'dashboard:activity' %}" class="btn btn-outline-secondary btn-sm">Activity log</a>
+      <a href="{% url 'admin:index' %}" class="btn btn-outline-dark btn-sm">Admin panel</a>
+    </div>
+  </div>
+
+  <div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-3 mb-4">
+    <div class="col">
+      <div class="card card-body text-center h-100">
+        <div class="fs-3">{{ stats.titles }}</div>
+        <div class="small text-muted">Titles ({{ stats.copies }} copies)</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card card-body text-center h-100">
+        <div class="fs-3">{{ stats.pending_pickups }}</div>
+        <div class="small text-muted">Waiting for pickup</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card card-body text-center h-100">
+        <div class="fs-3">{{ stats.on_loan }}</div>
+        <div class="small text-muted">On loan</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card card-body text-center h-100 {% if stats.overdue %}border-danger{% endif %}">
+        <div class="fs-3 {% if stats.overdue %}text-danger{% endif %}">{{ stats.overdue }}</div>
+        <div class="small text-muted">Overdue loans</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card card-body text-center h-100">
+        <div class="fs-3">{{ stats.people_waiting }}</div>
+        <div class="small text-muted">People in waitlists</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card card-body text-center h-100">
+        <div class="fs-3">{{ fine_currency }}{{ stats.unpaid_fines_total|floatformat:2 }}</div>
+        <div class="small text-muted">Unpaid fines ({{ stats.unpaid_fines_count }})</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <h2 class="h5">Waiting for pickup</h2>
+      {% if pending_reservations %}
+        <div class="table-responsive mb-4">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr><th>Reader</th><th>Book</th><th>Pick up before</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for r in pending_reservations %}
+                <tr>
+                  <td>{{ r.user.username }}</td>
+                  <td>{{ r.book.title }}</td>
+                  <td>{{ r.pickup_deadline|date:"M d, Y H:i" }}</td>
+                  <td class="text-end">
+                    <form method="post" action="{% url 'dashboard:check_out' r.pk %}">
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-primary">Check out</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-4">No reservations are waiting for pickup.</p>
+      {% endif %}
+
+      <h2 class="h5">Books on loan</h2>
+      {% if loans %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr><th>Reader</th><th>Book</th><th>Due</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for loan in loans %}
+                <tr {% if loan.days_late %}class="table-danger"{% endif %}>
+                  <td>{{ loan.user.username }}</td>
+                  <td>{{ loan.book.title }}</td>
+                  <td>{{ loan.due_date|date:"M d, Y" }}</td>
+                  <td>
+                    {% if loan.days_late %}
+                      <span class="badge text-bg-danger">{{ loan.days_late }} day{{ loan.days_late|pluralize }} late</span>
+                      <span class="small">fine so far {{ fine_currency }}{{ loan.accrued_fine|floatformat:2 }}</span>
+                    {% else %}
+                      <span class="badge text-bg-primary">On time</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <form method="post" action="{% url 'dashboard:check_in' loan.pk %}">
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-outline-success">Mark returned</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if stats.on_loan > table_limit %}
+          <p class="small text-muted">
+            Showing the {{ table_limit }} loans due soonest.
+            <a href="{% url 'admin:reservations_reservation_changelist' %}?status__exact=checked_out">View all in the admin panel</a>
+          </p>
+        {% endif %}
+      {% else %}
+        <p class="text-muted">No books are on loan.</p>
+      {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+      <h2 class="h5">Most borrowed books</h2>
+      {% if popular_books %}
+        <ol class="mb-4">
+          {% for book in popular_books %}
+            <li>
+              <a href="{{ book.get_absolute_url }}">{{ book.title }}</a>
+              <span class="text-muted small">({{ book.borrow_count }} loan{{ book.borrow_count|pluralize }})</span>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="text-muted mb-4">No loans yet.</p>
+      {% endif %}
+
+      <h2 class="h5">Longest waitlists</h2>
+      {% if longest_waitlists %}
+        <ul class="list-unstyled mb-4">
+          {% for w in longest_waitlists %}
+            <li>
+              <a href="{% url 'books:detail' w.book_id %}">{{ w.book__title }}</a>
+              <span class="text-muted small">({{ w.people }} {{ w.people|pluralize:"person,people" }})</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-muted mb-4">Nobody is waiting for a book.</p>
+      {% endif %}
+
+      <h2 class="h5">Reservations, last 14 days</h2>
+      <div class="mb-4">
+        {% for d in daily_reservations %}
+          <div class="d-flex align-items-center gap-2 small mb-1">
+            <span class="text-muted" style="width: 3.5rem;">{{ d.day|date:"M d" }}</span>
+            <div class="progress flex-fill" style="height: 10px;">
+                <div class="progress-bar" role="progressbar" style="width: {{ d.percent }}%;"></div>
+            </div>
+            <span style="width: 1.5rem;" class="text-end">{{ d.count }}</span>
+          </div>
+        {% endfor %}
+      </div>
+
+      <h2 class="h5">Recent staff activity</h2>
+      {% if recent_activity %}
+        <ul class="list-unstyled small mb-2">
+          {% for entry in recent_activity %}
+            <li class="mb-1">
+              <strong>{{ entry.actor.username|default:"(deleted user)" }}</strong>:
+              {{ entry.get_action_display }}
+              <div class="text-muted">{{ entry.object_repr }} &middot; {{ entry.created_at|date:"M d H:i" }}</div>
+            </li>
+          {% endfor %}
+        </ul>
+        <a href="{% url 'dashboard:activity' %}">View full log</a>
+      {% else %}
+        <p class="text-muted">No activity recorded yet.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
