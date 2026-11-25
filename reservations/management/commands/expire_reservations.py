@@ -1,11 +1,19 @@
 from django.core.management.base import BaseCommand
 
-from reservations.services import expire_stale_pickups
+from reservations.services import run_maintenance
 
 
 class Command(BaseCommand):
-    help = "Mark reservations whose pickup deadline passed as expired."
+    help = (
+        "Expire timed-out pickups and waitlist claims, then offer free "
+        "copies to people in the waitlist."
+    )
 
     def handle(self, *args, **options):
-        count = expire_stale_pickups()
-        self.stdout.write(self.style.SUCCESS(f"Expired {count} reservation(s)."))
+        pickups, claims, promoted = run_maintenance()
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Expired {pickups} pickup(s) and {claims} waitlist claim(s); "
+                f"notified {promoted} waiting reader(s)."
+            )
+        )

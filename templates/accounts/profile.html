@@ -19,6 +19,15 @@
     <a href="{% url 'admin:index' %}" class="btn btn-outline-dark mb-4">Admin panel</a>
   {% endif %}
 
+  {% if fine_summary.is_blocked %}
+    <div class="alert alert-danger">
+      You have outstanding late fees or overdue books
+      ({{ fine_currency }}{{ fine_summary.total|floatformat:2 }}).
+      New reservations are blocked until they are settled.
+      <a href="{% url 'reservations:mine' %}" class="alert-link">Details</a>
+    </div>
+  {% endif %}
+  
   <div class="row g-3 mb-4">
     <div class="col-4">
       <div class="card card-body text-center">

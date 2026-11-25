@@ -67,9 +67,30 @@ class BookQuerySet(models.QuerySet):
         return self.filter(is_deleted=False)
 
     def with_availability(self):
-        """Annotate reserved_count and available_count."""
-        # Imported here to avoid circular imports at module load time
-        from reservations.models import Reservation
+        """Annotate reserved_count and available_count.
+
+        reserved_count is the number of copies that are not on the shelf:
+        active reservations plus copies held for people at the front of
+        the waitlist.
+        """
+        from reservations.models import Reservation, WaitlistEntry
+
+        return self.annotate(
+            reserved_count=ExpressionWrapper(
+                _count_by_book(Reservation.objects.active())
+                + _count_by_book(WaitlistEntry.objects.holding()),
+                output_field=IntegerField(),
+            ),
+        ).annotate(
+            available_count=Greatest(
+                ExpressionWrapper(
+                    F("total_copies") - F("reserved_count"),
+                    output_field=IntegerField(),
+                ),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+        )
 
         return self.annotate(
             reserved_count=_count_by_book(Reservation.objects.active()),
@@ -166,7 +187,10 @@ class Book(models.Model):
 
     # Availability is always computed, never stored
     def active_reservation_count(self):
-        return self.reservations.active().count()
+        return (
+            self.reservations.active().count()
+            + self.waitlist_entries.holding().count()
+        )
 
     @property
     def available_copies(self):

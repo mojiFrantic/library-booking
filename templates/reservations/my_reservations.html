@@ -4,6 +4,85 @@
 {% block content %}
   <h1 class="mb-4">My reservations</h1>
 
+  {% if fine_summary.is_blocked %}
+    <div class="alert alert-danger">
+      <strong>You have outstanding late fees or overdue books.</strong>
+      You cannot reserve books or join waitlists until they are settled.
+      <ul class="mb-0 mt-2">
+        {% if fine_summary.unpaid_total %}
+          <li>Unpaid fines: {{ fine_currency }}{{ fine_summary.unpaid_total|floatformat:2 }}</li>
+        {% endif %}
+        {% if fine_summary.overdue_count %}
+          <li>
+            {{ fine_summary.overdue_count }} overdue book{{ fine_summary.overdue_count|pluralize }}
+            (fine so far: {{ fine_currency }}{{ fine_summary.accrued_total|floatformat:2 }}, still growing)
+          </li>
+        {% endif %}
+      </ul>
+      <div class="small mt-2">Please return overdue books and pay your fines at the library desk.</div>
+    </div>
+  {% endif %}
+
+  {% if unpaid_fines %}
+    <h2 class="h5">Unpaid fines</h2>
+    <div class="table-responsive mb-4">
+      <table class="table align-middle">
+        <thead>
+          <tr><th>Book</th><th>Days overdue</th><th>Amount</th><th>Date</th></tr>
+        </thead>
+        <tbody>
+          {% for fine in unpaid_fines %}
+            <tr>
+              <td>{{ fine.reservation.book.title }}</td>
+              <td>{{ fine.days_overdue }}</td>
+              <td>{{ fine_currency }}{{ fine.amount|floatformat:2 }}</td>
+              <td>{{ fine.created_at|date:"M d, Y" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  {% if waitlist_entries %}
+    <h2 class="h5">My waitlists</h2>
+    <div class="table-responsive mb-4">
+      <table class="table align-middle">
+        <thead>
+          <tr><th>Book</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for entry in waitlist_entries %}
+            <tr>
+              <td><a href="{{ entry.book.get_absolute_url }}">{{ entry.book.title }}</a></td>
+              <td>
+                {% if entry.status == "notified" %}
+                  <span class="badge text-bg-success">Copy held for you</span>
+                  <span class="small text-muted">until {{ entry.claim_deadline|date:"M d, Y H:i" }}</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">Number {{ entry.position }} in line</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                {% if entry.status == "notified" %}
+                  <form method="post" action="{% url 'reservations:reserve' entry.book.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-success">Reserve now</button>
+                  </form>
+                {% endif %}
+                <form method="post" action="{% url 'reservations:waitlist_leave' entry.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button class="btn btn-sm btn-outline-secondary">Leave</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  <h2 class="h5">Reservations</h2>
   {% if reservations %}
     <div class="table-responsive">
       <table class="table align-middle">

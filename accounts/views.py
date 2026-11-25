@@ -6,9 +6,9 @@ from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.views.generic import CreateView, TemplateView
 from django_ratelimit.decorators import ratelimit
-
+from django.conf import settings
+from reservations import fines
 from reservations.models import Reservation
-
 from .forms import LoginForm, RegisterForm
 
 
@@ -48,4 +48,6 @@ class ProfileView(LoginRequiredMixin, TemplateView):
         context["recent_reservations"] = reservations[:5]
         context["wishlist_count"] = user.wishlist_items.count()
         context["review_count"] = user.reviews.count()
+        context["fine_summary"] = fines.fine_summary(user)
+        context["fine_currency"] = settings.FINE_CURRENCY
         return context
