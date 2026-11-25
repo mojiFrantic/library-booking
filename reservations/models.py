@@ -99,3 +99,128 @@ class Reservation(models.Model):
         if self.is_overdue:
             return "Overdue"
         return self.get_status_display()
+
+
+class WaitlistQuerySet(models.QuerySet):
+    def waiting(self):
+        """Entries still waiting for a copy."""
+        return self.filter(status=WaitlistEntry.Status.WAITING)
+
+    def holding(self):
+        """Entries with an open claim: a copy is being kept for them."""
+        return self.filter(
+            status=WaitlistEntry.Status.NOTIFIED,
+            claim_deadline__gt=timezone.now(),
+        )
+
+    def open(self):
+        """Entries still in the queue: waiting, or holding a copy."""
+        return self.filter(
+            Q(status=WaitlistEntry.Status.WAITING)
+            | Q(
+                status=WaitlistEntry.Status.NOTIFIED,
+                claim_deadline__gt=timezone.now(),
+            )
+        )
+
+
+class WaitlistEntry(models.Model):
+    class Status(models.TextChoices):
+        WAITING = "waiting", "Waiting"
+        NOTIFIED = "notified", "Copy held"
+        FULFILLED = "fulfilled", "Reserved"
+        CANCELLED = "cancelled", "Left the waitlist"
+        EXPIRED = "expired", "Claim expired"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="waitlist_entries",
+    )
+    book = models.ForeignKey(
+        "books.Book",
+        on_delete=models.CASCADE,
+        related_name="waitlist_entries",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.WAITING,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    claim_deadline = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = WaitlistQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        constraints = [
+            # One open place in line per user and book
+            models.UniqueConstraint(
+                fields=["user", "book"],
+                condition=Q(status__in=["waiting", "notified"]),
+                name="unique_open_waitlist_entry_per_user_book",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user} waiting for {self.book} ({self.get_status_display()})"
+
+    def position(self):
+        """1-based place in line among people still waiting, else None."""
+        if self.status != self.Status.WAITING:
+            return None
+        ahead = (
+            WaitlistEntry.objects.waiting()
+            .filter(book_id=self.book_id)
+            .filter(
+                Q(created_at__lt=self.created_at)
+                | Q(created_at=self.created_at, pk__lt=self.pk)
+            )
+            .count()
+        )
+        return ahead + 1
+
+
+class Fine(models.Model):
+    class Status(models.TextChoices):
+        UNPAID = "unpaid", "Unpaid"
+        PAID = "paid", "Paid"
+        WAIVED = "waived", "Waived"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="fines",
+    )
+    reservation = models.OneToOneField(
+        Reservation,
+        on_delete=models.PROTECT,
+        related_name="fine",
+    )
+    days_overdue = models.PositiveIntegerField()
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.UNPAID,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    settled_at = models.DateTimeField(null=True, blank=True)
+    settled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user}: {self.amount} ({self.get_status_display()})"

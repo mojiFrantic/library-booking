@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from decouple import config
 from django.contrib.messages import constants as message_constants
+from decimal import Decimal
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -162,3 +163,14 @@ LOAN_PERIOD_DAYS = 14
 MAX_ACTIVE_RESERVATIONS = 3
 MAX_RENEWALS = 1
 RENEWAL_DAYS = 14
+
+# Waitlist
+WAITLIST_CLAIM_HOURS = 24
+
+# Late fines (paid offline at the library desk)
+FINE_PER_DAY = Decimal("1.00")
+FINE_MAX_PER_LOAN = Decimal("30.00")
+FINE_CURRENCY = "$"  # shown before amounts; change it to your currency
+
+# Used to build links in emails
+SITE_URL = "http://127.0.0.1:8000"
