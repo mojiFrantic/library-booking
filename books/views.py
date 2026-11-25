@@ -6,14 +6,13 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.generic import DetailView, ListView
 
-from reservations.models import Reservation
+from reservations.models import Reservation, WaitlistEntry
 from reviews.forms import ReviewForm
 from reviews.models import Review
 
 from .filters import BookFilter
 from .models import Book, WishlistItem
 from .selectors import similar_books
-
 
 class BookListView(ListView):
     template_name = "books/book_list.html"
@@ -63,8 +62,13 @@ class BookDetailView(DetailView):
             book=book, is_hidden=False
         ).select_related("user")[:20]
         context["similar_books"] = similar_books(book)
+        context["waitlist_length"] = (
+            WaitlistEntry.objects.waiting().filter(book=book).count()
+        )
 
         context["user_reservation"] = None
+        context["user_waitlist_entry"] = None
+        context["user_hold"] = None
         context["my_review"] = None
         context["review_form"] = None
         context["in_wishlist"] = False
@@ -72,6 +76,10 @@ class BookDetailView(DetailView):
             context["user_reservation"] = (
                 Reservation.objects.active().filter(user=user, book=book).first()
             )
+            entry = WaitlistEntry.objects.open().filter(user=user, book=book).first()
+            context["user_waitlist_entry"] = entry
+            if entry is not None and entry.status == WaitlistEntry.Status.NOTIFIED:
+                context["user_hold"] = entry
             my_review = Review.objects.filter(user=user, book=book).first()
             context["my_review"] = my_review
             context["review_form"] = ReviewForm(instance=my_review)
