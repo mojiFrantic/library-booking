@@ -42,8 +42,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',\
     # third party
     "rest_framework",
-    "captcha",
+    "rest_framework.authtoken",
     "django_filters",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
+    "captcha",
     "django.contrib.postgres",
     # local
     "accounts",
@@ -51,6 +54,7 @@ INSTALLED_APPS = [
     "reservations",
     "reviews",
     "dashboard",
+    "api",
 ]
 
 MIDDLEWARE = [
@@ -175,3 +179,40 @@ FINE_CURRENCY = "$"  # shown before amounts; change it to your currency
 
 # Used to build links in emails
 SITE_URL = "http://127.0.0.1:8000"
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
+    ],
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "api.pagination.StandardPagination",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",
+        "user": "1000/hour",
+        "auth": "10/min",  # login
+        "register": "5/hour",  # sign-up
+    },
+    "TEST_REQUEST_DEFAULT_FORMAT": "json",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Library API",
+    "DESCRIPTION": "REST API for the library reservation system.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    # Serve Swagger UI from local static files (the CDN is blocked here)
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "REDOC_DIST": "SIDECAR",
+}
